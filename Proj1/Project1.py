@@ -20,6 +20,7 @@ class PredictMPG:
         self.__df = pd.DataFrame(data=self.__data)
         self.__option = std_option
 
+
     #Make simple scatter plot and add line of regression (single)
     def MakePlot(self, X, Y, var1):
         fig = plt.figure()
@@ -31,6 +32,7 @@ class PredictMPG:
         plt.grid(True)
         plt.plot(np.unique(X), np.poly1d(np.polyfit(X, Y, 1))(np.unique(X)))
         plt.show()
+
 
     # Clean out the questionable data and fill w the mean, delete useless Name field
     def CleanData(self):
@@ -61,6 +63,8 @@ class PredictMPG:
         del temp_def['MPG']
         self.__X = temp_def.to_numpy()
         self.__XT = np.transpose(self.__X)
+
+
     # Get the w matrix for coefficients
     def getCoefficients(self):
         # multi-variate equation: w = (X^T (X))^-1(X^T)(r)#
@@ -68,48 +72,51 @@ class PredictMPG:
         print("Matrix coefficients: \n", self.__w)
 
 
-    #get standard deviation and get z-scores
-    def standardize(self):
-        std_vals = []
-        indiv_stdev = []
+    def getStdev(self):
+        self.__std_vals = []
         stdev = 0
         for i in self.__XT[1:]:
             for ele in i:
-                stdev += (math.sqrt(pow(abs(ele - i.mean()), 2)) / len(i)) #cumulative stdev
-                indiv_stdev.append((math.sqrt(pow(abs(ele - i.mean()), 2)) / len(i)))
-            std_vals.append(stdev)
+                stdev += (math.sqrt(pow(abs(ele - i.mean()), 2)) / len(i))  # cumulative stdev
+            self.__std_vals.append(stdev)
             stdev = 0
-        #print("\n Standard Deviation Values: ", std_vals)
+        print("\n Standard Deviation Values: ", self.__std_vals)
 
+
+    def getZscores(self):
         # Z-scores
         z_list = []
         j = 0
         for i in self.__XT[1:]:
             for ele in i:
-                x = float((ele - i.mean()) / std_vals[j])
+                x = float((ele - i.mean()) / self.__std_vals[j])
                 z_list.append(x)
             j += 1
         z_list = np.array(z_list).reshape(7, 398)
-        #print("\n Z-scores in matrix form: \n", z_list)
-        #print("\n Z-scores max/min: ", z_list.max(), z_list.min())
+        print("\n Z-scores in matrix form: \n", z_list)
+        print("\n Z-scores max/min: ", z_list.max(), z_list.min())
 
 
+    def getStdevMatrix(self):
         # Standardize matricies
         n = []
         x = 0
         for i in self.__XT[1:]:
             for ele in i:
-                temp = float((ele - i.mean()) / std_vals[x])
-
-                print(x, std_vals[x])
+                temp = float((ele - i.mean()) / self.__std_vals[x])
                 n.append(temp)
             x += 1
-
         one = [1] * 398
         f = one + n
         f = np.array(f).reshape(8, 398)
-        self.__XT = f
-        self.__X = f.transpose()
+        return f
+
+    #get standard deviation and get z-scores
+    def standardize(self):
+        self.getStdev()
+        self.getZscores()
+        self.__XT = self.getStdevMatrix()
+        self.__X = self.__XT.transpose()
         self.getCoefficients()
 
 
