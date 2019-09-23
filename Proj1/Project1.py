@@ -79,7 +79,7 @@ class PredictMPG:
                 indiv_stdev.append((math.sqrt(pow(abs(ele - i.mean()), 2)) / len(i)))
             std_vals.append(stdev)
             stdev = 0
-        print("\n Standard Deviation Values: ", std_vals)
+        #print("\n Standard Deviation Values: ", std_vals)
 
         # Z-scores
         z_list = []
@@ -90,9 +90,28 @@ class PredictMPG:
                 z_list.append(x)
             j += 1
         z_list = np.array(z_list).reshape(7, 398)
-        print("\n Z-scores in matrix form: \n", z_list)
-        print("\n Z-scores max/min: ", z_list.max(), z_list.min())
+        #print("\n Z-scores in matrix form: \n", z_list)
+        #print("\n Z-scores max/min: ", z_list.max(), z_list.min())
+
+
+        # Standardize matricies
+        n = []
+        x = 0
+        for i in self.__XT[1:]:
+            for ele in i:
+                temp = float((ele - i.mean()) / std_vals[x])
+
+                print(x, std_vals[x])
+                n.append(temp)
+            x += 1
+
+        one = [1] * 398
+        f = one + n
+        f = np.array(f).reshape(8, 398)
+        self.__XT = f
+        self.__X = f.transpose()
         self.getCoefficients()
+
 
     def run(self):
         self.CleanData() # clean bad data and fix columns
