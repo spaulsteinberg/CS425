@@ -83,7 +83,7 @@ class kNNandDT:
 
         return class_predictions
 
-    def confusion_matrix(self, classification_predictions, actual, k, stats):
+    def confusion_matrix(self, classification_predictions, actual, k=0, stats={}):
         conf = [0 for i in range(4)]
         for i in range(len(classification_predictions)):
             # true negative
@@ -112,11 +112,12 @@ class kNNandDT:
         conf = np.array(conf).reshape((2,2))
         conf_df = pd.DataFrame(conf, ["benign", "malignant"], ["benign", "malignant"])
         print(conf_df)
-        stats[k] = {'Accuracy': accuracy,
-                               'TPR': (TPR*100),
-                               'PPV': (PPV*100),
-                               'TNR': (TNR*100),
-                               'F1': (F1Score*100)}
+        if k != 0:
+            stats[k] = {'Accuracy': accuracy,
+                                'TPR': (TPR*100),
+                                'PPV': (PPV*100),
+                                'TNR': (TNR*100),
+                                'F1': (F1Score*100)}
 
 
     def runkNN(self):
@@ -179,61 +180,73 @@ class kNNandDT:
         file_name = str("\\Bestk.PNG")
         fig.savefig(path + file_name)
         plt.close()
+# ----------- DT here -----------------
 
-    def findPurity(self, classification):
+    def findPurity(self, classification, mat):
+        if len(mat) == 0: return 0
         Nmi = 0
-        Nm = len(self.train_matrix)
-        for ele in range(len(self.train_matrix)):
-            if classification == self.train_matrix[ele][-1]:
+        Nm = len(mat)
+        for ele in range(len(mat)):
+            if classification == mat[ele][-1]:
                 Nmi += 1
         return (Nmi/Nm)
 
-    def giniIndex(self):
-        return ( (2*self.findPurity(2)) * (1-self.findPurity(4)) )
+    def giniIndex(self, mat):
+        return ( (2*self.findPurity(2, mat)) * (1-self.findPurity(4, mat)) )
 
-    def misclassificationError(self):
-        return ( 1 - max(self.findPurity(2), (1-self.findPurity(2))) )
+    def misclassificationError(self, mat):
+        return ( 1 - max(self.findPurity(2, mat), (1-self.findPurity(2, mat))) )
 
-    def entropy(self):
+    def entropy(self, mat):
         entropy = 0
-        entropy += self.findPurity(2) * math.log2(self.findPurity(2))
-        entropy += self.findPurity(4) * math.log2(self.findPurity(4))
+        entropy += self.findPurity(2, mat) * math.log2(self.findPurity(2, mat))
+        entropy += self.findPurity(4, mat) * math.log2(self.findPurity(4, mat))
         return -entropy
 
     def processUserInput(self, option):
-        if option == "entropy": self.node_impurity = self.entropy()
-        elif option == "gini": self.node_impurity = self.giniIndex()
-        elif option == "misclassification error": self.node_impurity = self.misclassificationError()
+        if option == "entropy": self.node_impurity = 0
+        elif option == "gini": self.node_impurity = 1
+        elif option == "misclassification error": self.node_impurity = 2
         else:
             sys.stderr.write("Invalid option chosen: {}. Quitting...".format(option))
             sys.exit(0)
 
     # count which classification is most common (has majority) in set
-    def majorityClass(self):
+    def majorityClass(self, mat):
         benign_count, malignant_count = 0, 0
+        print(mat[:, -1])
         #go through all data in matrix attributes to try and build
-        for classification in self.train_matrix[:, -1]:
+        for classification in mat[:, -1]:
             if classification == 2: benign_count += 1
             elif classification == 4: malignant_count += 1
-        if benign_count > malignant_count or benign_count == malignant_count: return 2
+        if benign_count > malignant_count: return 2
         else: return 4
 
-    def GenerateTree(self):
+    def GenerateTree(self, mat):
         #some hard codes here for now
-        theta_one = 0.15
-        if self.node_impurity < theta_one:
-            classification = self.majorityClass()
+        theta_one = 0.16
+        max_depth = 5
+        if self.node_impurity == 0: imp = self.entropy(mat)
+        elif self.node_impurity == 1: imp = self.giniIndex(mat)
+        else: imp = self.misclassificationError(mat)
+
+
+        if imp < theta_one:
+            classification = self.majorityClass(mat)
             ret_node = Node(classification)
             return ret_node
-        #else...need to split...
+        else: return Node(4)
 
 
     def runDT(self, option):
         self.train, self.train_matrix, self.validation, self.validation_matrix, self.test, self.test_matrix \
             = self.SplitSet()
         self.processUserInput(option)
-        node = self.GenerateTree()
-        print(node.left, node.right, node.value)
+        # hard coded for now
+        #theta = [0.1, 0.2, 0.3, 0.4]
+        #max_depth = [2, 3, 4, 5, 6, 7]
+        tree = self.GenerateTree(self.train_matrix)
+
 
 
 
