@@ -4,7 +4,17 @@ __date__ = "October 21st, 2019"
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import sys, os
+import sys, os, math
+
+class Node:
+    #protect mutable constructor against mixing up data
+    def __init__(self, val, right=None, left=None):
+        if right is None: self.right = None
+        else: self.right = right
+        if left is None: self.left = None
+        else: self.left = left
+
+        self.value = val
 
 class kNNandDT:
 
@@ -109,7 +119,7 @@ class kNNandDT:
                                'F1': (F1Score*100)}
 
 
-    def run(self):
+    def runkNN(self):
         self.train, self.train_matrix, self.validation, self.validation_matrix, self.test, self.test_matrix\
             = self.SplitSet()
         k = [2, 3, 4, 5, 6, 7, 8, 17, 33]
@@ -157,7 +167,7 @@ class kNNandDT:
         plt.ylabel("Percentages")
         plt.title("Best k Performance Graph: k = 6")
         plt.xticks(np.arange(len(fields)), fields, rotation=90)
-        plt.show()
+        #plt.show()
         path = os.path.dirname(os.path.abspath(__file__)) + "\\Plots"
         try:
             os.mkdir(path)
@@ -169,6 +179,62 @@ class kNNandDT:
         file_name = str("\\Bestk.PNG")
         fig.savefig(path + file_name)
         plt.close()
+
+    def findPurity(self, classification):
+        Nmi = 0
+        Nm = len(self.train_matrix)
+        for ele in range(len(self.train_matrix)):
+            if classification == self.train_matrix[ele][-1]:
+                Nmi += 1
+        return (Nmi/Nm)
+
+    def giniIndex(self):
+        return ( (2*self.findPurity(2)) * (1-self.findPurity(4)) )
+
+    def misclassificationError(self):
+        return ( 1 - max(self.findPurity(2), (1-self.findPurity(2))) )
+
+    def entropy(self):
+        entropy = 0
+        entropy += self.findPurity(2) * math.log2(self.findPurity(2))
+        entropy += self.findPurity(4) * math.log2(self.findPurity(4))
+        return -entropy
+
+    def processUserInput(self, option):
+        if option == "entropy": self.node_impurity = self.entropy()
+        elif option == "gini": self.node_impurity = self.giniIndex()
+        elif option == "misclassification error": self.node_impurity = self.misclassificationError()
+        else:
+            sys.stderr.write("Invalid option chosen: {}. Quitting...".format(option))
+            sys.exit(0)
+
+    # count which classification is most common (has majority) in set
+    def majorityClass(self):
+        benign_count, malignant_count = 0, 0
+        #go through all data in matrix attributes to try and build
+        for classification in self.train_matrix[:, -1]:
+            if classification == 2: benign_count += 1
+            elif classification == 4: malignant_count += 1
+        if benign_count > malignant_count or benign_count == malignant_count: return 2
+        else: return 4
+
+    def GenerateTree(self):
+        #some hard codes here for now
+        theta_one = 0.15
+        if self.node_impurity < theta_one:
+            classification = self.majorityClass()
+            ret_node = Node(classification)
+            return ret_node
+        #else...need to split...
+
+
+    def runDT(self, option):
+        self.train, self.train_matrix, self.validation, self.validation_matrix, self.test, self.test_matrix \
+            = self.SplitSet()
+        self.processUserInput(option)
+        node = self.GenerateTree()
+        print(node.left, node.right, node.value)
+
 
 
 # Replace invalid values with means, convert to numeric integers
@@ -188,4 +254,7 @@ if __name__ == '__main__':
     data = pd.read_csv("breast-cancer-wisconsin.data", names=headers)
     data = CleanAndConvert(data, headers)
     kdt = kNNandDT(data)
-    kdt.run()
+    # perhaps put an option here for what mode
+    #kdt.runkNN()
+    option = input("Which impurity measure would you like to use (entropy, gini, misclassification error)? ")
+    kdt.runDT(option)
