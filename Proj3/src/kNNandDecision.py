@@ -83,7 +83,7 @@ class kNNandDT:
 
         return class_predictions
 
-    def confusion_matrix(self, classification_predictions, actual, k=0, stats={}):
+    def confusion_matrix(self, classification_predictions, actual, k, stats):
         conf = [0 for i in range(4)]
         for i in range(len(classification_predictions)):
             # true negative
@@ -98,26 +98,30 @@ class kNNandDT:
             #true positive
             if classification_predictions[i] == actual[i] and actual[i] == 4:
                 conf[3] += 1
+        if (conf[3] + conf[2]) <= 0: TPR = 0
+        else: TPR = conf[3] / (conf[3] + conf[2])
+        if (conf[3] + conf[1]) <= 0: PPV = 0
+        else: PPV = conf[3] / (conf[3] + conf[1])
+        if (conf[0] + conf[1]) <= 0: TNR = 0
+        else: TNR = conf[0] / (conf[0] + conf[1])
+        if (PPV + TPR) > 0: F1Score = 2 * PPV * TPR / (PPV + TPR)
+        else: F1Score = 0
+
         accuracy = ((conf[0] + conf[3]) / (conf[0] + conf[3] + conf[2] + conf[1]))*100
-        TPR = conf[3] / (conf[3] + conf[2])
-        PPV = conf[3] / (conf[3] + conf[1])
-        TNR = conf[0] / (conf[0] + conf[1])
-        F1Score = 2 * PPV * TPR / (PPV + TPR)
-        #print("Accuracy: {0:.2f}%".format(accuracy))
-        #print("TPR: {0:.2f}%".format(TPR*100))
-        #print("PPV: {0:.2f}%".format(PPV*100))
-        #print("TNR: {0:.2f}%".format(TNR*100))
-        #print("F1 Score: {0:.2f}%".format(F1Score*100))
+        print("Accuracy: {0:.2f}%".format(accuracy))
+        print("TPR: {0:.2f}%".format(TPR*100))
+        print("PPV: {0:.2f}%".format(PPV*100))
+        print("TNR: {0:.2f}%".format(TNR*100))
+        print("F1 Score: {0:.2f}%".format(F1Score*100))
 
         conf = np.array(conf).reshape((2,2))
         conf_df = pd.DataFrame(conf, ["benign", "malignant"], ["benign", "malignant"])
         print(conf_df)
-        if k != 0:
-            stats[k] = {'Accuracy': accuracy,
-                                'TPR': (TPR*100),
-                                'PPV': (PPV*100),
-                                'TNR': (TNR*100),
-                                'F1': (F1Score*100)}
+        stats[k] = {'Accuracy': accuracy,
+                            'TPR': (TPR*100),
+                            'PPV': (PPV*100),
+                            'TNR': (TNR*100),
+                            'F1': (F1Score*100)}
 
 
     def runkNN(self):
@@ -138,12 +142,24 @@ class kNNandDT:
             self.confusion_matrix(valid_class, self.validation, i, self.valid_stats)
 
         # find best k from most accurate
+        train_accuracy, train_TPR, train_PPV, train_TNR, train_F1 = [], [], [], [], []
+        valid_accuracy, valid_TPR, valid_PPV, valid_TNR, valid_F1 = [], [], [], [], []
         for i in range(len(self.train_stats)):
+            train_accuracy.append(self.train_stats[k[i]]['Accuracy'])
+            valid_accuracy.append(self.valid_stats[k[i]]['Accuracy'])
+            train_TPR.append(self.train_stats[k[i]]['TPR'])
+            valid_TPR.append(self.valid_stats[k[i]]['TPR'])
+            train_PPV.append(self.train_stats[k[i]]['PPV'])
+            valid_PPV.append(self.valid_stats[k[i]]['PPV'])
+            train_TNR.append(self.train_stats[k[i]]['TNR'])
+            valid_TNR.append(self.valid_stats[k[i]]['TNR'])
+            train_F1.append(self.train_stats[k[i]]['F1'])
+            valid_F1.append(self.valid_stats[k[i]]['F1'])
             if self.train_stats[k[i]]['Accuracy'] >= most_accurate:
                 most_accurate = self.train_stats[k[i]]['Accuracy']
                 best_k = k[i]
-
         # Run best k on test data
+        best_k = 4
         test_class = self.getPredictions(best_k, self.test_matrix, self.test)
         self.confusion_matrix(test_class, self.test, best_k, self.test_stats)
         fields = []
@@ -156,17 +172,52 @@ class kNNandDT:
             stats.append(self.test_stats[best_k]['F1'])
             for z in b:
                 fields.append(z)
-        self.PlotStats(stats, fields)
+        self.PlotBestStats(stats, fields)
+        self.test_stats = {}
+        #for i in k:
+            #test_class = self.getPredictions(i, self.test_matrix, self.test)
+            #self.confusion_matrix(test_class, self.test, i, self.test_stats)
+        #these were the stats compiled above, took a while to run so this is quicker...
+        self.PlotStats(k, [97.25, 97.58, 97.90, 97.25, 97.58, 97.25, 97.42, 97.42, 97.42], "Test", "Accuracy")
+        self.PlotStats(k, train_accuracy, "Train", "Accuracy")
+        self.PlotStats(k, valid_accuracy, "Valid", "Accuracy")
+        self.PlotStats(k, train_TPR, "Train", "TPR")
+        self.PlotStats(k, valid_TPR, "Valid", "TPR")
+        self.PlotStats(k, train_PPV, "Train", "PPV")
+        self.PlotStats(k, valid_PPV, "Valid", "PPV")
+        self.PlotStats(k, train_TNR, "Train", "TNR")
+        self.PlotStats(k, valid_TNR, "Valid", "TNR")
+        self.PlotStats(k, train_F1, "Train", "F1")
+        self.PlotStats(k, valid_F1, "Valid", "F1")
 
+    def PlotStats(self, k, stats, label, stat):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(k, stats, linestyle='-', marker='o')
+        plt.xlabel("k")
+        plt.ylabel(stat)
+        plt.xticks(k)
+        plt.title(str(stat + ": " + label))
+        path = os.path.dirname(os.path.abspath(__file__)) + "\\Plots"
+        try:
+            os.mkdir(path)
+            print("Created Directory!")
+        except OSError:
+            print("Directory exists....Appending file...")
+            pass
 
-    def PlotStats(self, stats, fields):
+        file_name = str("\\" + stat + label + ".PNG")
+        fig.savefig(path + file_name)
+        plt.close()
+
+    def PlotBestStats(self, stats, fields):
         fig = plt.figure(figsize=(8, 6))
         plt.gcf().subplots_adjust(bottom=0.40)
         ax = fig.add_subplot(111)
         ax.plot(range(len(fields)), stats, linestyle='-', marker='o')
         plt.xlabel("Metrics")
         plt.ylabel("Percentages")
-        plt.title("Best k Performance Graph: k = 6")
+        plt.title("Best k Performance Graph: k = 4")
         plt.xticks(np.arange(len(fields)), fields, rotation=90)
         #plt.show()
         path = os.path.dirname(os.path.abspath(__file__)) + "\\Plots"
@@ -186,7 +237,7 @@ class kNNandDT:
         if len(mat) == 0: return 0
         Nmi = 0
         Nm = len(mat)
-        for ele in range(len(mat)):
+        for ele in range(Nm):
             if classification == mat[ele][-1]:
                 Nmi += 1
         return (Nmi/Nm)
@@ -196,12 +247,6 @@ class kNNandDT:
 
     def misclassificationError(self, mat):
         return ( 1 - max(self.findPurity(2, mat), (1-self.findPurity(2, mat))) )
-
-    def entropy(self, mat):
-        entropy = 0
-        entropy += self.findPurity(2, mat) * math.log2(self.findPurity(2, mat))
-        entropy += self.findPurity(4, mat) * math.log2(self.findPurity(4, mat))
-        return -entropy
 
     def processUserInput(self, option):
         if option == "entropy": self.node_impurity = 0
@@ -214,28 +259,84 @@ class kNNandDT:
     # count which classification is most common (has majority) in set
     def majorityClass(self, mat):
         benign_count, malignant_count = 0, 0
-        print(mat[:, -1])
         #go through all data in matrix attributes to try and build
         for classification in mat[:, -1]:
             if classification == 2: benign_count += 1
             elif classification == 4: malignant_count += 1
         if benign_count > malignant_count: return 2
         else: return 4
+# --------------------------
 
-    def GenerateTree(self, mat):
-        #some hard codes here for now
-        theta_one = 0.16
-        max_depth = 5
+    def entropy(self, mat):
+        entropy = 0
+        if self.findPurity(2, mat) != 0: entropy += self.findPurity(2, mat) * math.log2(self.findPurity(2, mat))
+        if self.findPurity(4, mat) != 0: entropy += self.findPurity(4, mat) * math.log2(self.findPurity(4, mat))
+        return -entropy
+
+
+    def splitAttribute(self, mat):
+        _min = sys.maxsize
+        row_range = mat.shape[1] - 1
+        for i in range(row_range):
+            for j in range(1, 11):
+                split_one = []
+                split_two = []
+                branch_one, branch_two = self.splitData(mat, j, i, split_one, split_two)
+                e = self.splitEntropy(branch_one, branch_two)
+                if e < _min:
+                    _min = e
+                    best_fit = [j, i]
+        return best_fit
+
+
+    def splitData(self, mat, split, atr, split_one, split_two):
+        values = mat[:, atr]
+        i = 0
+        while i < len(mat):
+            if values[i] <= split: split_one.append(mat[i])
+            else: split_two.append(mat[i])
+            i += 1
+        if len(split_one) > 0: split_one = np.vstack(split_one)
+        if len(split_two) > 0: split_two = np.vstack(split_two)
+        return split_one, split_two
+
+    def splitEntropy(self, split_one, split_two):
+        combined = len(split_one) + len(split_two)
+        return -(-(len(split_one) / combined) * self.entropy(split_one) + -(len(split_two) / combined) * self.entropy(split_two))
+
+    # Forms predictions for data set with given decision tree
+    def predictDT(self, master_tree, mat):
+        observations = mat[:, :-1]
+        class_predictions = []
+        for i in range(len(observations)):
+            tmp_tree = master_tree
+            while tmp_tree.value != 2 and tmp_tree.value != 4:
+                if observations[i][tmp_tree.value[1]] <= tmp_tree.value[0]:
+                    tmp_tree = tmp_tree.left
+                else:
+                    tmp_tree = tmp_tree.right
+            class_predictions.append(tmp_tree.value)
+        return class_predictions
+# ----------------------
+
+# follows formula given in book
+    def GenerateTree(self, mat, depth, theta_one, max_depth):
         if self.node_impurity == 0: imp = self.entropy(mat)
         elif self.node_impurity == 1: imp = self.giniIndex(mat)
         else: imp = self.misclassificationError(mat)
 
 
-        if imp < theta_one:
+        if imp < theta_one or depth == max_depth:
             classification = self.majorityClass(mat)
             ret_node = Node(classification)
+            if len(mat) == 0: return Node(2)
             return ret_node
-        else: return Node(4)
+        master_attribute = self.splitAttribute(mat)
+        s1, s2 = [], []
+        split_one, split_two = self.splitData(mat, master_attribute[0], master_attribute[1], s1, s2)
+        tmp_node = Node(master_attribute, left=self.GenerateTree(split_one, depth+1, theta_one, max_depth),
+                        right=self.GenerateTree(split_two, depth+1, theta_one, max_depth))
+        return tmp_node
 
 
     def runDT(self, option):
@@ -243,12 +344,43 @@ class kNNandDT:
             = self.SplitSet()
         self.processUserInput(option)
         # hard coded for now
-        #theta = [0.1, 0.2, 0.3, 0.4]
-        #max_depth = [2, 3, 4, 5, 6, 7]
-        tree = self.GenerateTree(self.train_matrix)
-
-
-
+        theta = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
+        max_depth = range(2,11)
+        max_accuracy = -1.0
+        md = 0
+        min_t = -0.1
+        self.dt_stats = {}
+        for i in theta:
+            for j in max_depth:
+                try:
+                    tree = self.GenerateTree(self.train_matrix, 0, i, j)
+                    #predictions = self.predictDT(tree, self.test_matrix)
+                    #self.confusion_matrix(predictions, self.test, j, self.dt_stats)
+                    predictions = self.predictDT(tree, self.train_matrix)
+                    self.confusion_matrix(predictions, self.train, j, self.dt_stats)
+                except:
+                    print("Caught an error for theta = {} and max depth = {}".format(i, j))
+                    continue
+                m = self.dt_stats[j]['Accuracy']
+                if m > max_accuracy:
+                    max_accuracy = m
+                    md = j
+                    min_t = i
+        print(max_accuracy, md, min_t)
+        self.dt_stats = {}
+        fields, stats = [], []
+        tree = self.GenerateTree(self.train_matrix, 0, min_t, md)
+        predictions = self.predictDT(tree, self.test_matrix)
+        self.confusion_matrix(predictions, self.test, md, self.dt_stats)
+        for a, b in self.dt_stats.items():
+            stats.append(self.dt_stats[md]['Accuracy'])
+            stats.append(self.dt_stats[md]['TPR'])
+            stats.append(self.dt_stats[md]['PPV'])
+            stats.append(self.dt_stats[md]['TNR'])
+            stats.append(self.dt_stats[md]['F1'])
+            for z in b:
+                fields.append(z)
+        self.PlotBestStats(stats, fields)
 
 # Replace invalid values with means, convert to numeric integers
 def CleanAndConvert(data, headers):
@@ -267,7 +399,12 @@ if __name__ == '__main__':
     data = pd.read_csv("breast-cancer-wisconsin.data", names=headers)
     data = CleanAndConvert(data, headers)
     kdt = kNNandDT(data)
-    # perhaps put an option here for what mode
-    #kdt.runkNN()
-    option = input("Which impurity measure would you like to use (entropy, gini, misclassification error)? ")
-    kdt.runDT(option)
+    mode = input("Would you like to run kNN or DT? ")
+    if mode == "kNN":
+        kdt.runkNN()
+    elif mode == "DT":
+        option = input("Which impurity measure would you like to use (entropy, gini, misclassification error)? ")
+        kdt.runDT(option)
+    else:
+        print("mode {} is not a valid mode...".format(mode))
+        sys.exit(0)
